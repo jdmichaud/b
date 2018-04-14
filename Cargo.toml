@@ -1,0 +1,11 @@
+[package]
+name = "b"
+version = "0.1.0"
+authors = ["jd <jean.daniel.michaud@gmail.com>"]
+
+[dependencies]
+pancurses = "0.15"
+ncurses = "5.91.0"
+log = "0.4"
+simplelog = "^0.5.0"
+itertools = "^0.7.8"
