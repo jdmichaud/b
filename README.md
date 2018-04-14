@@ -7,8 +7,11 @@ A minimalistic file browser.
 ## Dependencies
 
 You need rust (at least v1.6.0) installed.
+
 You also need the ncurses dev library (at least v5).
+
 For ubuntu, to install the ncurses library:
+
 ```bash
 apt install libncurses5-dev
 ```
