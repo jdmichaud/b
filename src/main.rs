@@ -6,6 +6,7 @@ extern crate simplelog;
 extern crate pancurses;
 extern crate ncurses;
 extern crate itertools;
+extern crate chrono;
 
 use std::fs;
 use std::path;
@@ -17,6 +18,8 @@ use std::io::Error;
 use itertools::Itertools;
 use pancurses::{Input, Attribute, ColorPair, chtype};
 use simplelog::{WriteLogger, LevelFilter, Config};
+use chrono::offset::Utc;
+use chrono::DateTime;
 
 enum Mode {
   Browsing,
@@ -32,10 +35,43 @@ struct Model {
   error: Option<Error>,
   color_scheme: HashMap<String, Vec<u8>>,
   show_hidden: bool,
+  show_detail: bool,
+}
+
+fn format_size(len: u64) -> String {
+  if len < 1024 {
+    len.to_string() + "B"
+  } else if len < 1024 * 1024 {
+    format!("{:.2}KB", len as f32 / 1024f32)
+  } else if len < 1024 * 1024 * 1024 {
+    format!("{:.2}MB", len as f32 / (1024f32 * 1024f32))
+  } else if len < 1024 * 1024 * 1024 * 1024 {
+    format!("{:.2}GB", len as f32 / (1024f32 * 1024f32 * 1024f32))
+  } else if len < 1024 * 1024 * 1024 * 1024 * 1024 {
+    format!("{:.2}TB", len as f32 / (1024f32 * 1024f32 * 1024f32 * 1024f32))
+  } else {
+    "Too big!".to_string()
+  }
 }
 
 fn display_entry(window: &mut pancurses::Window, model: &Model, entry: &DirEntry) {
-  window.printw(entry.path().as_path().file_name().unwrap().to_str().unwrap());
+  if model.show_detail {
+    let path = entry.path();
+    let filename = path.as_path().file_name().unwrap().to_str().unwrap();
+    let metadata = match entry.metadata() {
+      Ok(m) => m,
+      Err(error) => {
+        error!("There was an error while display the entry: {:?}", path);
+        return;
+      }
+    };
+    let size = if path.is_dir() { "/".to_string() } else { format_size(metadata.len()) };
+    let last_modified: DateTime<Utc> = metadata.modified().unwrap().into();
+    window.printw(&format!("{} {:>10} {}", last_modified.format("%Y-%m-%d %T"), size, filename));
+  }
+  else {
+    window.printw(entry.path().as_path().file_name().unwrap().to_str().unwrap());
+  }
 }
 
 fn display_list(window: &mut pancurses::Window, model: &Model) {
@@ -46,11 +82,9 @@ fn display_list(window: &mut pancurses::Window, model: &Model) {
     .for_each(|(index, entry)| {
       let mut attrs: chtype = 0;
       if entry.path().is_dir() {
-        info!("a directory!");
         match model.color_scheme.get("di") {
           Some(color) if color.len() == 2 => {
             attrs = attrs | chtype::from(ColorPair(color[1]) | Attribute::Bold);
-            info!("apply {:?}", ColorPair(color[1]));
           },
           Some(_) | None => info!("no color for directory"),
         }
@@ -165,6 +199,7 @@ fn main() {
     error: None,
     color_scheme: get_colors_db(),
     show_hidden: false,
+    show_detail: false,
   };
 
   update_model_from_dir(&mut model, None).unwrap();
@@ -230,6 +265,15 @@ fn main() {
           display(&mut window, &model);
         }
       },
+      Some(Input::Character('.')) => {
+        model.show_hidden = !model.show_hidden;
+        update_model_from_dir(&mut model, None).unwrap();
+        display(&mut window, &model);
+      }
+      Some(Input::Character('d')) => {
+        model.show_detail = !model.show_detail;
+        display(&mut window, &model);
+      }
       Some(Input::KeyResize) => { display(&mut window, &model); },
       _ => { info!("unknown key {:?}", c); },
     }
