@@ -36,11 +36,11 @@ b /some/path
 ```
 
 Then use the:
-<kbd>&rightarrow</kbd> or
+<kbd>&rarr;</kbd> or
 <kbd>Enter</kbd> or
 <kbd>l</kbd> to enter a folder
 
-<kbd>&leftarrow</kbd> to go back to the parent folder
+<kbd>&larr;</kbd> to go back to the parent folder
 
 <kbd>Escape</kbd> or
 <kbd>q</kbd> to quit
