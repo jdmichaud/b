@@ -43,6 +43,7 @@ struct Model {
   no_match: bool,
   escaped: bool,
   cursor_shift: usize,
+  selected_buffer: String,
 }
 
 fn format_size(len: u64) -> String {
@@ -272,6 +273,8 @@ fn browsing_mode(c: Option<Input>, mut window: &mut pancurses::Window, mut model
     Some(Input::Character('\u{1b}')) |
     Some(Input::Character('q')) => { // Escape key
       pancurses::endwin();
+      // Copy selected to the clipboard
+      // Exit
       ::std::process::exit(0);
     },
     Some(Input::KeyUp) |
@@ -330,6 +333,9 @@ fn browsing_mode(c: Option<Input>, mut window: &mut pancurses::Window, mut model
       info!("window resized");
       display(&mut window, &model);
     },
+    Some(Input::Character(' ')) => {
+      model.selected_buffer = model.entries[model.pointed].path().to_str().unwrap().to_string();
+    }
     _ => { info!("unknown key {:?}", c); },
   }
 }
@@ -366,6 +372,9 @@ fn roaming_mode(c: Option<Input>, mut window: &mut pancurses::Window, mut model:
           model.roam_path = model.cwd.clone() + "/";
           display(&mut window, &model);
         }
+        Some(Input::Character(' ')) => {
+          model.selected_buffer = model.entries[model.pointed].path().to_str().unwrap().to_string();
+        }
         Some(Input::Character(l)) => {
           let roam_path_size = model.roam_path.len();
           model.roam_path.insert(roam_path_size.saturating_sub(model.cursor_shift).into(), l);
@@ -388,7 +397,6 @@ fn roaming_mode(c: Option<Input>, mut window: &mut pancurses::Window, mut model:
           model.cursor_shift = model.roam_path.len();
           display(&mut window, &model);
         }
-        // Some()
         Some(Input::KeyBackspace) => {
           let roam_path_size = model.roam_path.len();
           let position = roam_path_size.saturating_sub(model.cursor_shift);
@@ -448,6 +456,7 @@ fn main() {
     no_match: true,
     escaped: false,
     cursor_shift: 0,
+    selected_buffer: "".to_string(),
   };
 
   update_model_from_dir(&mut model, None).unwrap();
