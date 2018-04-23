@@ -273,7 +273,9 @@ fn browsing_mode(c: Option<Input>, mut window: &mut pancurses::Window, mut model
     Some(Input::Character('\u{1b}')) |
     Some(Input::Character('q')) => { // Escape key
       pancurses::endwin();
-      // Copy selected to the clipboard
+      if model.selected_buffer != "" {
+        println!("{}", model.selected_buffer);
+      }
       // Exit
       ::std::process::exit(0);
     },
