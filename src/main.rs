@@ -342,7 +342,9 @@ fn browsing_mode(c: Option<Input>, mut window: &mut pancurses::Window, mut model
       model.mode = Mode::Roaming;
       model.error = None;
       model.roam_path = model.cwd.clone();
-      model.roam_path.push('/');
+      if model.roam_path.chars().last().unwrap() != '/' {
+        model.roam_path.push('/');
+      }
       roam_model(&mut model);
       display(&mut window, &model);
     },
