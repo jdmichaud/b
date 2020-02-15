@@ -2,7 +2,7 @@
 
 A minimalistic file browser.
 
-[![demo](https://asciinema.org/a/fvJQ39iaAzqAU0sTgVd2DlsQv.png)](https://asciinema.org/a/fvJQ39iaAzqAU0sTgVd2DlsQv?autoplay=1)
+[![demo](demo.gif)
 
 # Installation
 
