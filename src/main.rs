@@ -10,6 +10,7 @@ extern crate itertools;
 extern crate chrono;
 
 use std::fs;
+use std::ffi::OsString;
 use std::path;
 use std::fs::DirEntry;
 use std::fs::File;
@@ -19,8 +20,7 @@ use std::io::Error;
 use itertools::Itertools;
 use pancurses::{Input, Attribute, ColorPair, chtype};
 use simplelog::{WriteLogger, LevelFilter, Config};
-use chrono::offset::Utc;
-use chrono::DateTime;
+use chrono::{Datelike, DateTime, Timelike, Utc};
 
 #[derive(PartialEq)]
 enum Mode {
@@ -161,12 +161,14 @@ fn update_model_from_dir(model: &mut Model, path: Option<String>) -> Result<(), 
     None => model.cwd.clone(),
   };
   match fs::read_dir(new_path) {
-    Ok(entries) => { 
+    Ok(entries) => {
       model.entries = entries
         .map(|entry| entry.unwrap())
-        .filter(|entry| !(model.show_hidden == false && entry.file_name().to_str().unwrap().starts_with(".")))
+        .filter(|entry|
+          !(model.show_hidden == false && entry.file_name().to_str().unwrap().starts_with(".")))
         .collect::<Vec<DirEntry>>();
-      model.entries.sort_by(|a, b| a.file_name().to_str().unwrap().cmp(b.file_name().to_str().unwrap()));
+      model.entries.sort_by(
+        |a, b| a.file_name().to_str().unwrap().cmp(b.file_name().to_str().unwrap()));
       Ok(())
     },
     Err(error) => {
@@ -192,6 +194,9 @@ fn get_height(window: &pancurses::Window) -> usize {
   return window.get_max_y().saturating_sub(3) as usize;
 }
 
+/**
+ * Returns the color database of the terminal if present in the env variable LS_COLORS.
+ */
 fn get_colors_db() -> HashMap<String, Vec<u8>> {
   match std::env::var_os("LS_COLORS") {
     Some(val) => {
@@ -256,18 +261,19 @@ fn change_cwd_to_pointed(mut model: &mut Model) {
   }
 }
 
-fn scroll_down(window: &pancurses::Window, model: &mut Model) {
-  model.pointed = min(
-    min(window.get_max_y().saturating_sub(1) as usize, model.entries.len().saturating_sub(1)),
-    model.pointed.saturating_add(1));
+fn scroll_down(window: &pancurses::Window, model: &mut Model, shift: usize) {
+  model.pointed = min(model.entries.len().saturating_sub(1), model.pointed.saturating_add(shift));
   model.first = max(0, model.pointed.saturating_sub(get_height(&window) - 1));
 }
 
-fn scroll_up(model: &mut Model) {
-  model.pointed = max(0, model.pointed.saturating_sub(1));
+fn scroll_up(model: &mut Model, shift: usize) {
+  model.pointed = max(0, model.pointed.saturating_sub(shift));
   model.first = min(model.first, model.pointed);
 }
 
+/**
+ * Handle keyboard events in browsing mode.
+ */
 fn browsing_mode(c: Option<Input>, mut window: &mut pancurses::Window, mut model: &mut Model) {
   match c {
     Some(Input::Character('\u{1b}')) |
@@ -281,31 +287,41 @@ fn browsing_mode(c: Option<Input>, mut window: &mut pancurses::Window, mut model
     },
     Some(Input::KeyUp) |
     Some(Input::Character('k')) => {
-      scroll_up(model);
+      scroll_up(model, 1);
       display(&mut window, &model);
     },
     Some(Input::KeyDown) |
     Some(Input::Character('j')) => {
-      scroll_down(window, model);
+      scroll_down(window, model, 1);
       display(&mut window, &model);
     },
     Some(Input::KeyPPage) => {
-      model.pointed = max(0, model.pointed.saturating_sub(get_height(&window) - 1));
-      model.first = min(model.first, model.pointed);
+      scroll_up(model, get_height(&window) - 1);
       display(&mut window, &model);
     },
     Some(Input::KeyNPage) => {
-      model.pointed = min(
-        min(window.get_max_y().saturating_sub(1) as usize, model.entries.len().saturating_sub(1)),
-        model.pointed.saturating_add(get_height(&window) - 1));
-      model.first = max(0, model.pointed.saturating_sub(get_height(&window) - 1));
+      scroll_down(window, model, get_height(&window) - 1);
       display(&mut window, &model);
     },
+    Some(Input::KeyHome) => {
+      model.pointed = 0;
+      model.first = 0;
+      display(&mut window, &model);
+    }
+    Some(Input::KeyEnd) => {
+      model.pointed = model.entries.len().saturating_sub(1);
+      model.first = model.pointed.saturating_sub(get_height(&window) - 1);
+      display(&mut window, &model);
+    }
     Some(Input::KeyLeft) |
     Some(Input::Character('h')) => {
       let mut new_path = path::PathBuf::from(&model.cwd);
+      let pointed = OsString::from(new_path.file_name().unwrap());
       new_path.pop();
       change_cwd(&mut model, String::from(new_path.to_str().unwrap())).unwrap();
+      // Retrieve the index of the cwd in the entries of the parent directory
+      model.pointed = model.entries.iter().position(|e| e.file_name() == pointed).unwrap();
+      model.first = max(0, model.pointed.saturating_sub(get_height(&window) - 1));
       display(&mut window, &model);
     },
     Some(Input::Character('\r')) |
@@ -342,6 +358,9 @@ fn browsing_mode(c: Option<Input>, mut window: &mut pancurses::Window, mut model
   }
 }
 
+/**
+ * Handle keyboard events in roaming mode.
+ */
 fn roaming_mode(c: Option<Input>, mut window: &mut pancurses::Window, mut model: &mut Model) {
   match c {
     Some(Input::Character('\u{1b}')) => {
@@ -361,12 +380,12 @@ fn roaming_mode(c: Option<Input>, mut window: &mut pancurses::Window, mut model:
           display(&mut window, &model);
         },
         Some(Input::KeyUp) => {
-          scroll_up(model);
+          scroll_up(model, 1);
           display(&mut window, &model);
         },
         Some(Input::Character('\t')) |
         Some(Input::KeyDown) => {
-          scroll_down(window, model);
+          scroll_down(window, model, 1);
           display(&mut window, &model);
         },
         Some(Input::Character('\r')) => {
@@ -403,7 +422,7 @@ fn roaming_mode(c: Option<Input>, mut window: &mut pancurses::Window, mut model:
           let roam_path_size = model.roam_path.len();
           let position = roam_path_size.saturating_sub(model.cursor_shift);
           if model.escaped {
-            let mut s: String;
+            let s: String;
             {
               let mut v = model.roam_path.split("/").filter(|d| d != &"").collect::<Vec<&str>>();
               v.pop();
@@ -427,9 +446,24 @@ fn roaming_mode(c: Option<Input>, mut window: &mut pancurses::Window, mut model:
   }
 }
 
-fn main() {
-  WriteLogger::init(LevelFilter::Info, Config::default(), File::create("b.log").unwrap()).unwrap();
+fn setup_logs() {
+  // Only log if RUST_BACKTRACE is set to 1
+  if Some(OsString::from("1")) == std::env::var_os("RUST_BACKTRACE") {
+    let now = Utc::now();
+    let log_filename = format!("/tmp/b-{:04}{:02}{:02}{:02}{:02}{:02}.log",
+      now.year(),
+      now.month(),
+      now.day(),
+      now.hour(),
+      now.minute(),
+      now.second(),
+    );
+    WriteLogger::init(LevelFilter::Info, Config::default(), File::create(log_filename).unwrap()).unwrap();
+  }
+}
 
+fn main() {
+  setup_logs();
   let mut window = pancurses::initscr();
   ncurses::set_escdelay(0);
   pancurses::cbreak();
@@ -438,7 +472,10 @@ fn main() {
   pancurses::start_color();
   pancurses::use_default_colors();
   window.keypad(true);
+  // This application models is where we will keep the entire state of the
+  // application. We could serialize it later and use it to restore the app.
   let mut model = Model {
+    // The list of files and directory in the current working directory.
     entries: vec![],
     pointed: 0,
     first: 0,
