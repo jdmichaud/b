@@ -232,6 +232,8 @@ fn roam_model(mut model: &mut Model) {
   if valid_parent.to_str().unwrap().starts_with(path::MAIN_SEPARATOR) { valid_size += 1 }
   change_cwd(&mut model, valid_parent.to_str().unwrap().to_string()).unwrap();
 
+  model.first = 0;
+  model.pointed = 0;
   model.no_match = false;
   if valid_size < model.roam_path.len() {
     let rest = &model.roam_path.clone()[valid_size..];
