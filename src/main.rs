@@ -148,7 +148,7 @@ fn display_input_line(window: &mut pancurses::Window, model: &Model) {
 }
 
 fn display(window: &mut pancurses::Window, model: &Model) {
-  window.clear();
+  window.erase();
   window.mv(0, 0);
   window.printw(&format!("DIR: {}", model.cwd));
   display_list(window, model);
