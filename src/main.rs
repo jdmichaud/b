@@ -233,7 +233,6 @@ fn roam_model(mut model: &mut Model) {
   change_cwd(&mut model, valid_parent.to_str().unwrap().to_string()).unwrap();
 
   model.no_match = false;
-  model.pointed = 0; // To improve: we shall keep track of our selection.
   if valid_size < model.roam_path.len() {
     let rest = &model.roam_path.clone()[valid_size..];
     let previous_len = model.entries.len();
