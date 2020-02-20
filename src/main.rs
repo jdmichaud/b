@@ -10,6 +10,7 @@ extern crate itertools;
 extern crate chrono;
 
 use std::fs;
+use std::io;
 use std::ffi::OsString;
 use std::path;
 use std::fs::DirEntry;
@@ -73,7 +74,7 @@ fn display_entry(window: &mut pancurses::Window, model: &Model, entry: &DirEntry
         return;
       }
     };
-    let size = if path.is_dir() { "/".to_string() } else { format_size(metadata.len()) };
+    let size = if path.is_dir() { path::MAIN_SEPARATOR.to_string() } else { format_size(metadata.len()) };
     let last_modified: DateTime<Utc> = metadata.modified().unwrap().into();
     window.printw(&format!("{} {:>10} {}", last_modified.format("%Y-%m-%d %T"), size, filename));
   }
@@ -155,7 +156,7 @@ fn display(window: &mut pancurses::Window, model: &Model) {
   display_input_line(window, model);
 }
 
-fn update_model_from_dir(model: &mut Model, path: Option<String>) -> Result<(), ()> {
+fn update_model_from_dir(model: &mut Model, path: Option<String>) -> Result<(), io::Error> {
   let new_path = match path {
     Some(p) => p,
     None => model.cwd.clone(),
@@ -173,20 +174,23 @@ fn update_model_from_dir(model: &mut Model, path: Option<String>) -> Result<(), 
     },
     Err(error) => {
       model.error = Some(error);
-      Err(())
+      Err(error)
     },
   }
 }
 
-fn change_cwd(model: &mut Model, path: String) -> Result<(), ()> {
-  if model.cwd.len() == 0 { model.cwd = "/".to_string() }
+fn change_cwd(model: &mut Model, path: String) -> Result<(), io::Error> {
+  if model.cwd.len() == 0 { model.cwd = path::MAIN_SEPARATOR.to_string() }
   let res = update_model_from_dir(model, Some(path.clone()));
   match res {
     Ok(()) => {
       model.cwd = path;
-      res
+      ()
     },
-    _ => res
+    Err(error) => {
+      model.error = Some(error);
+      error
+    },
   }
 }
 
@@ -223,13 +227,13 @@ fn get_colors_db() -> HashMap<String, Vec<u8>> {
 fn roam_model(mut model: &mut Model) {
   let roam_path = model.roam_path.clone();
   let path = path::Path::new(&roam_path);
-  let s = String::from("test");
+  let separator = String::from(path::MAIN_SEPARATOR.to_string());
   let valid_parent = match path.ancestors().find(|p| p.is_dir()) {
     Some(p) => p,
-    None => path::Path::new("/"),
+    None => path::Path::new(&separator),
   };
-  let mut valid_size = valid_parent.to_str().unwrap().len();
-  if valid_parent.to_str().unwrap().starts_with(path::MAIN_SEPARATOR) { valid_size += 1 }
+  let valid_size = valid_parent.to_str().unwrap().len() +
+    if valid_parent.to_str().unwrap().starts_with(&separator) { 1 } else { 0 };
   change_cwd(&mut model, valid_parent.to_str().unwrap().to_string()).unwrap();
 
   model.first = 0;
@@ -257,7 +261,10 @@ fn change_cwd_to_pointed(mut model: &mut Model) {
         model.first = 0;
         ()
       },
-      _ => ()
+      Err(error) => {
+        model.error = Some(error);
+        ()
+      },
     }
   }
 }
@@ -277,8 +284,8 @@ fn scroll_up(model: &mut Model, shift: usize) {
  */
 fn browsing_mode(c: Option<Input>, mut window: &mut pancurses::Window, mut model: &mut Model) {
   match c {
-    Some(Input::Character('\u{1b}')) |
-    Some(Input::Character('q')) => { // Escape key
+    Some(Input::Character('\u{1b}')) | // Escape key
+    Some(Input::Character('q')) => {
       pancurses::endwin();
       if model.selected_buffer != "" {
         println!("{}", model.selected_buffer);
@@ -393,7 +400,7 @@ fn roaming_mode(c: Option<Input>, mut window: &mut pancurses::Window, mut model:
         },
         Some(Input::Character('\r')) => {
           change_cwd_to_pointed( &mut model);
-          model.roam_path = model.cwd.clone() + "/";
+          model.roam_path = model.cwd.clone() + &path::MAIN_SEPARATOR.to_string();
           display(&mut window, &model);
         }
         Some(Input::Character(' ')) => {
@@ -427,9 +434,11 @@ fn roaming_mode(c: Option<Input>, mut window: &mut pancurses::Window, mut model:
           if model.escaped {
             let s: String;
             {
-              let mut v = model.roam_path.split("/").filter(|d| d != &"").collect::<Vec<&str>>();
+              let mut v = model.roam_path
+                .split(&path::MAIN_SEPARATOR.to_string())
+                .filter(|d| d != &"").collect::<Vec<&str>>();
               v.pop();
-              s = "/".to_string() + &v.join("/");
+              s = path::MAIN_SEPARATOR.to_string().to_string() + &v.join(&path::MAIN_SEPARATOR.to_string());
             }
             model.roam_path = s;
           } else {
