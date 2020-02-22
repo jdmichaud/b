@@ -10,7 +10,6 @@ extern crate itertools;
 extern crate chrono;
 
 use std::fs;
-use std::io;
 use std::ffi::OsString;
 use std::path;
 use std::fs::DirEntry;
@@ -156,12 +155,13 @@ fn display(window: &mut pancurses::Window, model: &Model) {
   display_input_line(window, model);
 }
 
-fn update_model_from_dir(model: &mut Model, path: Option<String>) -> Result<(), io::Error> {
+fn update_model_from_dir(model: &mut Model, path: Option<String>) -> Result<(), ()> {
   let new_path = match path {
     Some(p) => p,
     None => model.cwd.clone(),
   };
-  match fs::read_dir(new_path) {
+  let res = fs::read_dir(new_path);
+  match res {
     Ok(entries) => {
       model.entries = entries
         .map(|entry| entry.unwrap())
@@ -174,23 +174,20 @@ fn update_model_from_dir(model: &mut Model, path: Option<String>) -> Result<(), 
     },
     Err(error) => {
       model.error = Some(error);
-      Err(error)
+      Err(())
     },
   }
 }
 
-fn change_cwd(model: &mut Model, path: String) -> Result<(), io::Error> {
+fn change_cwd(model: &mut Model, path: String) -> Result<(), ()> {
   if model.cwd.len() == 0 { model.cwd = path::MAIN_SEPARATOR.to_string() }
   let res = update_model_from_dir(model, Some(path.clone()));
   match res {
     Ok(()) => {
       model.cwd = path;
-      ()
+      Ok(())
     },
-    Err(error) => {
-      model.error = Some(error);
-      error
-    },
+    Err(error) => Err(()),
   }
 }
 
@@ -261,10 +258,7 @@ fn change_cwd_to_pointed(mut model: &mut Model) {
         model.first = 0;
         ()
       },
-      Err(error) => {
-        model.error = Some(error);
-        ()
-      },
+      Err(error) => (),
     }
   }
 }
